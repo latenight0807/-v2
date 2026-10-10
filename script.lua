@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (FOV 안 들어오면 카메라 고정)
+-- 자체제작 핵 v2 (벽 체크 + 자동발사/스피드핵 수정)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -21,6 +21,7 @@ local Settings = {
 		Enabled = false,
 		FOV = 200,
 		TeamCheck = true,
+		WallCheck = true,
 		FOVVisible = true,
 		AutoFire = false,
 	},
@@ -66,6 +67,13 @@ CombatTab:CreateToggle({
 		Settings.Aimbot.TeamCheck = Value
 		Settings.ESP.TeamCheck = Value
 	end,
+})
+
+CombatTab:CreateToggle({
+	Name = "벽 체크",
+	CurrentValue = true,
+	Flag = "WallCheck",
+	Callback = function(Value) Settings.Aimbot.WallCheck = Value end,
 })
 
 CombatTab:CreateToggle({
@@ -317,7 +325,20 @@ local function UpdateESP()
 	end
 end
 
--- 가장 가까운 적 (FOV 안)
+-- 벽 체크
+local function IsVisible(targetPart)
+	if not Settings.Aimbot.WallCheck then return true end
+	local myChar = LocalPlayer.Character
+	if not myChar or not myChar:FindFirstChild("Head") then return false end
+
+	local origin = myChar.Head.Position
+	local direction = (targetPart.Position - origin)
+	local ray = Ray.new(origin, direction)
+	local hit = workspace:FindPartOnRayWithIgnoreList(ray, {myChar, targetPart.Parent})
+	return hit == nil or hit:IsDescendantOf(targetPart.Parent)
+end
+
+-- 가장 가까운 적 (FOV + 벽 체크)
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
@@ -332,6 +353,8 @@ local function GetClosest()
 		local humanoid = char:FindFirstChildOfClass("Humanoid")
 		local head = char:FindFirstChild("Head")
 		if not humanoid or humanoid.Health <= 0 or not head then continue end
+
+		if not IsVisible(head) then continue end
 
 		local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
 		if not onScreen then continue end
@@ -413,26 +436,29 @@ RunService:BindToRenderStep("AimbotForce", Enum.RenderPriority.Last.Value, funct
 		local char = LocalPlayer.Character
 		if char then
 			local humanoid = char:FindFirstChildOfClass("Humanoid")
-			if humanoid then
+			if humanoid and humanoid.WalkSpeed ~= Settings.Player.Speed then
 				humanoid.WalkSpeed = Settings.Player.Speed
 			end
 		end
 	end
 
-	-- 에임봇: FOV 안에 들어오면 바로 카메라 고정
+	-- 에임봇 (벽 체크 포함)
 	if Settings.Aimbot.Enabled then
 		local target = GetClosest()
 		if target then
 			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
 
 			-- 자동발사
-			if Settings.Aimbot.AutoFire and tick() - lastFire > 0.1 then
+			if Settings.Aimbot.AutoFire and tick() - lastFire > 0.12 then
 				lastFire = tick()
-				local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-				if tool then
-					pcall(function()
-						tool:Activate()
-					end)
+				local char = LocalPlayer.Character
+				if char then
+					local tool = char:FindFirstChildOfClass("Tool")
+					if tool then
+						pcall(function()
+							tool:Activate()
+						end)
+					end
 				end
 			end
 		end
@@ -450,6 +476,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "에임핵과 자동발사 업데이트 - by 랭온",
+	Content = "벽 체크 + 자동발사/스피드핵 수정 - by 랭온",
 	Duration = 4,
 })
