@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (벽 체크 + 자동발사/스피드핵 수정)
+-- 자체제작 핵 v2 (벽통과)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -23,7 +23,6 @@ local Settings = {
 		TeamCheck = true,
 		WallCheck = true,
 		FOVVisible = true,
-		AutoFire = false,
 	},
 	ESP = {
 		Enabled = false,
@@ -32,13 +31,12 @@ local Settings = {
 		Distance = true,
 		Health = true,
 		TeamCheck = true,
+		MaxDistance = 2000,
 		Color = Color3.fromRGB(210, 210, 220),
 	},
 	Player = {
 		InfiniteJump = false,
 		Noclip = false,
-		Speed = 16,
-		SpeedEnabled = false,
 	}
 }
 
@@ -50,13 +48,6 @@ CombatTab:CreateToggle({
 	CurrentValue = false,
 	Flag = "AimbotEnabled",
 	Callback = function(Value) Settings.Aimbot.Enabled = Value end,
-})
-
-CombatTab:CreateToggle({
-	Name = "자동발사",
-	CurrentValue = false,
-	Flag = "AutoFire",
-	Callback = function(Value) Settings.Aimbot.AutoFire = Value end,
 })
 
 CombatTab:CreateToggle({
@@ -141,33 +132,10 @@ PlayerTab:CreateToggle({
 })
 
 PlayerTab:CreateToggle({
-	Name = "노클립",
+	Name = "벽통과",
 	CurrentValue = false,
 	Flag = "Noclip",
 	Callback = function(Value) Settings.Player.Noclip = Value end,
-})
-
-PlayerTab:CreateToggle({
-	Name = "스피드핵",
-	CurrentValue = false,
-	Flag = "SpeedEnabled",
-	Callback = function(Value) Settings.Player.SpeedEnabled = Value end,
-})
-
-PlayerTab:CreateSlider({
-	Name = "스피드",
-	Range = {16, 100},
-	Increment = 1,
-	CurrentValue = 16,
-	Flag = "Speed",
-	Callback = function(Value) Settings.Player.Speed = Value end,
-})
-
-PlayerTab:CreateButton({
-	Name = "가장 가까운 적 머리 위로 순간이동",
-	Callback = function()
-		TeleportToEnemy()
-	end,
 })
 
 -- 서비스
@@ -266,30 +234,52 @@ local function CreateESP(player)
 	}
 
 	local function attach(char)
+		if not char then return end
 		highlight.Parent = char
 		local head = char:WaitForChild("Head", 3)
-		if head then billboard.Parent = head end
+		if head then
+			billboard.Parent = head
+		end
 	end
-	if player.Character then attach(player.Character) end
+
+	if player.Character then
+		attach(player.Character)
+	end
 	player.CharacterAdded:Connect(attach)
 end
 
 local function UpdateESP()
+	local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
 	for player, data in pairs(ESPObjects) do
-		if not player.Parent or not player.Character then
+		local char = player.Character
+		if not player.Parent or not char then
 			data.Highlight.Enabled = false
 			data.Billboard.Enabled = false
 			continue
 		end
-		local char = player.Character
+
 		local humanoid = char:FindFirstChildOfClass("Humanoid")
 		local root = char:FindFirstChild("HumanoidRootPart")
-		if not humanoid or not root or humanoid.Health <= 0 then
+		local head = char:FindFirstChild("Head")
+
+		if not humanoid or not root or not head or humanoid.Health <= 0 then
 			data.Highlight.Enabled = false
 			data.Billboard.Enabled = false
 			continue
 		end
+
 		if Settings.ESP.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+			data.Highlight.Enabled = false
+			data.Billboard.Enabled = false
+			continue
+		end
+
+		local dist = 0
+		if myRoot then
+			dist = (root.Position - myRoot.Position).Magnitude
+		end
+		if dist > Settings.ESP.MaxDistance then
 			data.Highlight.Enabled = false
 			data.Billboard.Enabled = false
 			continue
@@ -301,11 +291,7 @@ local function UpdateESP()
 
 		if on then
 			data.NameLabel.Text = Settings.ESP.Name and player.Name or ""
-			local distTxt = ""
-			if Settings.ESP.Distance and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-				distTxt = math.floor((root.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m"
-			end
-			data.InfoLabel.Text = distTxt
+			data.InfoLabel.Text = Settings.ESP.Distance and (math.floor(dist) .. "m") or ""
 
 			if Settings.ESP.Health then
 				data.HealthBarBG.Visible = true
@@ -332,13 +318,17 @@ local function IsVisible(targetPart)
 	if not myChar or not myChar:FindFirstChild("Head") then return false end
 
 	local origin = myChar.Head.Position
-	local direction = (targetPart.Position - origin)
-	local ray = Ray.new(origin, direction)
-	local hit = workspace:FindPartOnRayWithIgnoreList(ray, {myChar, targetPart.Parent})
-	return hit == nil or hit:IsDescendantOf(targetPart.Parent)
+	local direction = targetPart.Position - origin
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {myChar}
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local result = workspace:Raycast(origin, direction, raycastParams)
+	if not result then return true end
+	return result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
--- 가장 가까운 적 (FOV + 벽 체크)
+-- 가장 가까운 적
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
@@ -368,36 +358,6 @@ local function GetClosest()
 	return closest
 end
 
--- 순간이동
-local function TeleportToEnemy()
-	local myChar = LocalPlayer.Character
-	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
-
-	local closestPlayer, closestDist = nil, math.huge
-	for _, player in pairs(Players:GetPlayers()) do
-		if player == LocalPlayer then continue end
-		if Settings.Aimbot.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then continue end
-
-		local char = player.Character
-		if not char then continue end
-		local humanoid = char:FindFirstChildOfClass("Humanoid")
-		local head = char:FindFirstChild("Head")
-		if not humanoid or humanoid.Health <= 0 or not head then continue end
-
-		local dist = (head.Position - myChar.HumanoidRootPart.Position).Magnitude
-		if dist < closestDist then
-			closestDist = dist
-			closestPlayer = head
-		end
-	end
-
-	if closestPlayer then
-		local targetPos = closestPlayer.Position + Vector3.new(0, 3, 0)
-		myChar.HumanoidRootPart.CFrame = CFrame.new(targetPos, closestPlayer.Position)
-		Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestPlayer.Position)
-	end
-end
-
 -- 무한 점프
 UserInputService.JumpRequest:Connect(function()
 	if Settings.Player.InfiniteJump then
@@ -412,8 +372,12 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- 초기화
-for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
+for _, p in pairs(Players:GetPlayers()) do
+	CreateESP(p)
+end
+
 Players.PlayerAdded:Connect(CreateESP)
+
 Players.PlayerRemoving:Connect(function(p)
 	if ESPObjects[p] then
 		pcall(function() ESPObjects[p].Highlight:Destroy() end)
@@ -423,7 +387,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 -- 메인 루프
-local lastFire = 0
 RunService:BindToRenderStep("AimbotForce", Enum.RenderPriority.Last.Value, function()
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
@@ -431,40 +394,15 @@ RunService:BindToRenderStep("AimbotForce", Enum.RenderPriority.Last.Value, funct
 
 	UpdateESP()
 
-	-- 스피드핵
-	if Settings.Player.SpeedEnabled then
-		local char = LocalPlayer.Character
-		if char then
-			local humanoid = char:FindFirstChildOfClass("Humanoid")
-			if humanoid and humanoid.WalkSpeed ~= Settings.Player.Speed then
-				humanoid.WalkSpeed = Settings.Player.Speed
-			end
-		end
-	end
-
 	-- 에임봇 (벽 체크 포함)
 	if Settings.Aimbot.Enabled then
 		local target = GetClosest()
 		if target then
 			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-
-			-- 자동발사
-			if Settings.Aimbot.AutoFire and tick() - lastFire > 0.12 then
-				lastFire = tick()
-				local char = LocalPlayer.Character
-				if char then
-					local tool = char:FindFirstChildOfClass("Tool")
-					if tool then
-						pcall(function()
-							tool:Activate()
-						end)
-					end
-				end
-			end
 		end
 	end
 
-	-- 노클립
+	-- 벽통과
 	if Settings.Player.Noclip and LocalPlayer.Character then
 		for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
 			if part:IsA("BasePart") then
@@ -476,6 +414,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "벽 체크 + 자동발사/스피드핵 수정 - by 랭온",
+	Content = "벽통과로 이름 변경 - by 랭온",
 	Duration = 4,
 })
