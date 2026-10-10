@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (에임봇 수정 버전)
+-- 자체제작 핵 v2 (플라이 수정)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -135,7 +135,7 @@ PlayerTab:CreateToggle({
 
 PlayerTab:CreateSlider({
 	Name = "플라이 속도",
-	Range = {10, 150},
+	Range = {10, 200},
 	Increment = 5,
 	CurrentValue = 50,
 	Flag = "FlySpeed",
@@ -156,7 +156,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- FOV 원 (GUI)
+-- FOV 원
 local FOVGui = Instance.new("ScreenGui")
 FOVGui.Name = "FOVCircleGui"
 FOVGui.IgnoreGuiInset = true
@@ -304,7 +304,7 @@ local function UpdateESP()
 	end
 end
 
--- 에임봇 (수정됨 - 더 강하게 강제)
+-- 에임봇
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
@@ -332,8 +332,9 @@ local function GetClosest()
 	return closest
 end
 
--- 플라이
-local FlyBody, FlyGyro = nil, nil
+-- 플라이 (수정 버전)
+local flying = false
+local flyConnection
 
 local function StartFly()
 	local char = LocalPlayer.Character
@@ -343,26 +344,43 @@ local function StartFly()
 	if not root or not humanoid then return end
 
 	humanoid.PlatformStand = true
+	flying = true
 
-	FlyBody = Instance.new("BodyVelocity")
-	FlyBody.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-	FlyBody.Velocity = Vector3.zero
-	FlyBody.Parent = root
+	flyConnection = RunService.Heartbeat:Connect(function()
+		if not flying or not root or not root.Parent then return end
 
-	FlyGyro = Instance.new("BodyGyro")
-	FlyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-	FlyGyro.P = 3000
-	FlyGyro.Parent = root
+		local camCF = Camera.CFrame
+		local dir = Vector3.zero
+
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir += camCF.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= camCF.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir -= camCF.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir += camCF.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.yAxis end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.yAxis end
+
+		if dir.Magnitude > 0 then
+			root.Velocity = dir.Unit * Settings.Player.FlySpeed
+		else
+			root.Velocity = Vector3.zero
+		end
+	end)
 end
 
 local function StopFly()
+	flying = false
+	if flyConnection then
+		flyConnection:Disconnect()
+		flyConnection = nil
+	end
+
 	local char = LocalPlayer.Character
 	if char then
 		local humanoid = char:FindFirstChildOfClass("Humanoid")
-		if humanoid then humanoid.PlatformStand = false end
+		if humanoid then
+			humanoid.PlatformStand = false
+		end
 	end
-	if FlyBody then FlyBody:Destroy() FlyBody = nil end
-	if FlyGyro then FlyGyro:Destroy() FlyGyro = nil end
 end
 
 -- 초기화
@@ -380,16 +398,14 @@ LocalPlayer.CharacterAdded:Connect(function()
 	StopFly()
 end)
 
--- 메인 루프 (우선순위 높여서 카메라 강제)
+-- 메인 루프
 RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, function()
-	-- FOV 원
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
 	FOVFrame.Visible = Settings.Aimbot.Enabled and Settings.Aimbot.FOVVisible
 
 	UpdateESP()
 
-	-- 에임봇 (우클릭 누를 때)
 	if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
 		local target = GetClosest()
 		if target then
@@ -399,26 +415,11 @@ RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, f
 		end
 	end
 
-	-- 플라이
-	if Settings.Player.Fly then
-		if not FlyBody or not FlyBody.Parent then
-			StartFly()
-		end
-		if FlyBody and FlyGyro then
-			local camCF = Camera.CFrame
-			local dir = Vector3.zero
-			if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + camCF.LookVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - camCF.LookVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - camCF.RightVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + camCF.RightVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
-			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0, 1, 0) end
-
-			FlyBody.Velocity = dir.Magnitude > 0 and dir.Unit * Settings.Player.FlySpeed or Vector3.zero
-			FlyGyro.CFrame = camCF
-		end
-	else
-		if FlyBody then StopFly() end
+	-- 플라이 토글 처리
+	if Settings.Player.Fly and not flying then
+		StartFly()
+	elseif not Settings.Player.Fly and flying then
+		StopFly()
 	end
 
 	-- 노클립
@@ -433,6 +434,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "에임봇 수정 완료 - by 랭온",
+	Content = "플라이 수정 완료 - by 랭온",
 	Duration = 4,
 })
