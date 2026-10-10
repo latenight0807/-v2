@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (스핀핵 3인칭 강제)
+-- 자체제작 핵 v2 (스핀핵 3인칭 강제 v2)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -41,7 +41,7 @@ local Settings = {
 	},
 	Spinbot = {
 		Enabled = false,
-		Speed = 18,
+		Speed = 40,
 		Range = 30,
 		AutoShoot = true,
 	}
@@ -156,9 +156,9 @@ PlayerTab:CreateToggle({
 
 PlayerTab:CreateSlider({
 	Name = "스핀 속도",
-	Range = {5, 40},
+	Range = {10, 80},
 	Increment = 1,
-	CurrentValue = 18,
+	CurrentValue = 40,
 	Flag = "SpinSpeed",
 	Callback = function(Value) Settings.Spinbot.Speed = Value end,
 })
@@ -454,7 +454,7 @@ local spinAngle = 0
 local lastShoot = 0
 
 -- 메인 루프
-RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Camera.Value + 1, function(dt)
+RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function(dt)
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
 	FOVFrame.Visible = Settings.Aimbot.Enabled and Settings.Aimbot.FOVVisible
@@ -467,17 +467,19 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Camera.Value + 1, fu
 
 	-- 스핀핵
 	if Settings.Spinbot.Enabled and root and humanoid then
-		-- 3인칭 강제 (매 프레임)
-		pcall(function()
-			LocalPlayer.CameraMode = Enum.CameraMode.Classic
-			LocalPlayer.CameraMinZoomDistance = 14
-			LocalPlayer.CameraMaxZoomDistance = 16
-		end)
+		-- 카메라 완전 제어
+		Camera.CameraType = Enum.CameraType.Scriptable
 
-		-- 회전
-		spinAngle = (spinAngle + Settings.Spinbot.Speed * dt * 6) % 360
+		-- 캐릭터 회전
+		spinAngle = (spinAngle + Settings.Spinbot.Speed * dt * 12) % 360
 		local currentPos = root.Position
 		root.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+
+		-- 3인칭 카메라 (뒤에서 고정 거리)
+		local offset = Vector3.new(0, 2.5, 12)
+		local rotatedOffset = CFrame.Angles(0, math.rad(spinAngle), 0):VectorToWorldSpace(offset)
+		local camPos = currentPos + rotatedOffset
+		Camera.CFrame = CFrame.new(camPos, currentPos + Vector3.new(0, 1.8, 0))
 
 		-- 범위 안 자동 사격
 		if Settings.Spinbot.AutoShoot then
@@ -489,18 +491,14 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Camera.Value + 1, fu
 					local oldCF = Camera.CFrame
 					Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
 					pcall(function() tool:Activate() end)
-					task.delay(0.05, function()
-						if Camera then Camera.CFrame = oldCF end
-					end)
+					task.delay(0.03, function() end)
 				end
 			end
 		end
 	else
-		-- 복구
-		pcall(function()
-			LocalPlayer.CameraMinZoomDistance = 0.5
-			LocalPlayer.CameraMaxZoomDistance = 128
-		end)
+		if Camera.CameraType == Enum.CameraType.Scriptable then
+			Camera.CameraType = Enum.CameraType.Custom
+		end
 	end
 
 	-- 일반 에임봇
@@ -523,6 +521,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "스핀핵 3인칭 강제 수정 - by 랭온",
+	Content = "스핀핵 3인칭 강제 - by 랭온",
 	Duration = 4,
 })
