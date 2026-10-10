@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (플라이 수정)
+-- 자체제작 핵 v2 (인피니트 점프)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -34,8 +34,7 @@ local Settings = {
 		Color = Color3.fromRGB(210, 210, 220),
 	},
 	Player = {
-		Fly = false,
-		FlySpeed = 50,
+		InfiniteJump = false,
 		Noclip = false,
 	}
 }
@@ -127,19 +126,10 @@ VisualTab:CreateToggle({
 PlayerTab:CreateSection("이동")
 
 PlayerTab:CreateToggle({
-	Name = "플라이",
+	Name = "인피니트 점프",
 	CurrentValue = false,
-	Flag = "Fly",
-	Callback = function(Value) Settings.Player.Fly = Value end,
-})
-
-PlayerTab:CreateSlider({
-	Name = "플라이 속도",
-	Range = {10, 200},
-	Increment = 5,
-	CurrentValue = 50,
-	Flag = "FlySpeed",
-	Callback = function(Value) Settings.Player.FlySpeed = Value end,
+	Flag = "InfiniteJump",
+	Callback = function(Value) Settings.Player.InfiniteJump = Value end,
 })
 
 PlayerTab:CreateToggle({
@@ -332,56 +322,18 @@ local function GetClosest()
 	return closest
 end
 
--- 플라이 (수정 버전)
-local flying = false
-local flyConnection
-
-local function StartFly()
-	local char = LocalPlayer.Character
-	if not char then return end
-	local root = char:FindFirstChild("HumanoidRootPart")
-	local humanoid = char:FindFirstChildOfClass("Humanoid")
-	if not root or not humanoid then return end
-
-	humanoid.PlatformStand = true
-	flying = true
-
-	flyConnection = RunService.Heartbeat:Connect(function()
-		if not flying or not root or not root.Parent then return end
-
-		local camCF = Camera.CFrame
-		local dir = Vector3.zero
-
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir += camCF.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= camCF.LookVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir -= camCF.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir += camCF.RightVector end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.yAxis end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.yAxis end
-
-		if dir.Magnitude > 0 then
-			root.Velocity = dir.Unit * Settings.Player.FlySpeed
-		else
-			root.Velocity = Vector3.zero
-		end
-	end)
-end
-
-local function StopFly()
-	flying = false
-	if flyConnection then
-		flyConnection:Disconnect()
-		flyConnection = nil
-	end
-
-	local char = LocalPlayer.Character
-	if char then
-		local humanoid = char:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			humanoid.PlatformStand = false
+-- 인피니트 점프
+UserInputService.JumpRequest:Connect(function()
+	if Settings.Player.InfiniteJump then
+		local char = LocalPlayer.Character
+		if char then
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
 		end
 	end
-end
+end)
 
 -- 초기화
 for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
@@ -394,10 +346,6 @@ Players.PlayerRemoving:Connect(function(p)
 	end
 end)
 
-LocalPlayer.CharacterAdded:Connect(function()
-	StopFly()
-end)
-
 -- 메인 루프
 RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, function()
 	local size = Settings.Aimbot.FOV * 2
@@ -406,6 +354,7 @@ RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, f
 
 	UpdateESP()
 
+	-- 에임봇
 	if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
 		local target = GetClosest()
 		if target then
@@ -413,13 +362,6 @@ RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, f
 			local smooth = math.clamp(1 - Settings.Aimbot.Smoothness, 0.05, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(goal, smooth)
 		end
-	end
-
-	-- 플라이 토글 처리
-	if Settings.Player.Fly and not flying then
-		StartFly()
-	elseif not Settings.Player.Fly and flying then
-		StopFly()
 	end
 
 	-- 노클립
@@ -434,6 +376,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "플라이 수정 완료 - by 랭온",
+	Content = "인피니트 점프 추가 - by 랭온",
 	Duration = 4,
 })
