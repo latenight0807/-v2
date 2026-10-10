@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (인피니트 점프)
+-- 자체제작 핵 v2 (스피드핵 + 순간이동 + 자동발사)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -23,6 +23,7 @@ local Settings = {
 		Smoothness = 0.12,
 		TeamCheck = true,
 		FOVVisible = true,
+		AutoFire = false,
 	},
 	ESP = {
 		Enabled = false,
@@ -36,6 +37,8 @@ local Settings = {
 	Player = {
 		InfiniteJump = false,
 		Noclip = false,
+		Speed = 16,
+		SpeedEnabled = false,
 	}
 }
 
@@ -47,6 +50,13 @@ CombatTab:CreateToggle({
 	CurrentValue = false,
 	Flag = "AimbotEnabled",
 	Callback = function(Value) Settings.Aimbot.Enabled = Value end,
+})
+
+CombatTab:CreateToggle({
+	Name = "자동발사",
+	CurrentValue = false,
+	Flag = "AutoFire",
+	Callback = function(Value) Settings.Aimbot.AutoFire = Value end,
 })
 
 CombatTab:CreateToggle({
@@ -126,7 +136,7 @@ VisualTab:CreateToggle({
 PlayerTab:CreateSection("이동")
 
 PlayerTab:CreateToggle({
-	Name = "인피니트 점프",
+	Name = "무한 점프",
 	CurrentValue = false,
 	Flag = "InfiniteJump",
 	Callback = function(Value) Settings.Player.InfiniteJump = Value end,
@@ -137,6 +147,29 @@ PlayerTab:CreateToggle({
 	CurrentValue = false,
 	Flag = "Noclip",
 	Callback = function(Value) Settings.Player.Noclip = Value end,
+})
+
+PlayerTab:CreateToggle({
+	Name = "스피드핵",
+	CurrentValue = false,
+	Flag = "SpeedEnabled",
+	Callback = function(Value) Settings.Player.SpeedEnabled = Value end,
+})
+
+PlayerTab:CreateSlider({
+	Name = "스피드",
+	Range = {16, 100},
+	Increment = 1,
+	CurrentValue = 16,
+	Flag = "Speed",
+	Callback = function(Value) Settings.Player.Speed = Value end,
+})
+
+PlayerTab:CreateButton({
+	Name = "가장 가까운 적 머리 위로 순간이동",
+	Callback = function()
+		TeleportToEnemy()
+	end,
 })
 
 -- 서비스
@@ -186,13 +219,13 @@ local function CreateESP(player)
 	highlight.Enabled = false
 
 	local billboard = Instance.new("BillboardGui")
-	billboard.Size = UDim2.new(0, 180, 0, 48)
-	billboard.StudsOffset = Vector3.new(0, 2.9, 0)
+	billboard.Size = UDim2.new(0, 160, 0, 42)
+	billboard.StudsOffset = Vector3.new(0, 2.7, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Enabled = false
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, 0, 0, 16)
+	nameLabel.Size = UDim2.new(1, 0, 0, 14)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.TextColor3 = Settings.ESP.Color
 	nameLabel.Font = Enum.Font.GothamBold
@@ -201,18 +234,18 @@ local function CreateESP(player)
 	nameLabel.Parent = billboard
 
 	local infoLabel = Instance.new("TextLabel")
-	infoLabel.Size = UDim2.new(1, 0, 0, 14)
-	infoLabel.Position = UDim2.new(0, 0, 0, 15)
+	infoLabel.Size = UDim2.new(1, 0, 0, 12)
+	infoLabel.Position = UDim2.new(0, 0, 0, 14)
 	infoLabel.BackgroundTransparency = 1
 	infoLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
 	infoLabel.Font = Enum.Font.Gotham
-	infoLabel.TextSize = 11
+	infoLabel.TextSize = 10
 	infoLabel.TextStrokeTransparency = 0.45
 	infoLabel.Parent = billboard
 
 	local hpBG = Instance.new("Frame")
-	hpBG.Size = UDim2.new(0.55, 0, 0, 3)
-	hpBG.Position = UDim2.new(0.225, 0, 0, 34)
+	hpBG.Size = UDim2.new(0.4, 0, 0, 3)
+	hpBG.Position = UDim2.new(0.3, 0, 0, 30)
 	hpBG.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 	hpBG.BorderSizePixel = 0
 	hpBG.Parent = billboard
@@ -322,7 +355,37 @@ local function GetClosest()
 	return closest
 end
 
--- 인피니트 점프
+-- 순간이동 (가장 가까운 적 머리 위로)
+local function TeleportToEnemy()
+	local myChar = LocalPlayer.Character
+	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+
+	local closestPlayer, closestDist = nil, math.huge
+	for _, player in pairs(Players:GetPlayers()) do
+		if player == LocalPlayer then continue end
+		if Settings.Aimbot.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then continue end
+
+		local char = player.Character
+		if not char then continue end
+		local humanoid = char:FindFirstChildOfClass("Humanoid")
+		local head = char:FindFirstChild("Head")
+		if not humanoid or humanoid.Health <= 0 or not head then continue end
+
+		local dist = (head.Position - myChar.HumanoidRootPart.Position).Magnitude
+		if dist < closestDist then
+			closestDist = dist
+			closestPlayer = head
+		end
+	end
+
+	if closestPlayer then
+		local targetPos = closestPlayer.Position + Vector3.new(0, 3, 0)
+		myChar.HumanoidRootPart.CFrame = CFrame.new(targetPos, closestPlayer.Position)
+		Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestPlayer.Position)
+	end
+end
+
+-- 무한 점프
 UserInputService.JumpRequest:Connect(function()
 	if Settings.Player.InfiniteJump then
 		local char = LocalPlayer.Character
@@ -354,13 +417,34 @@ RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, f
 
 	UpdateESP()
 
-	-- 에임봇
+	-- 스피드핵
+	if Settings.Player.SpeedEnabled then
+		local char = LocalPlayer.Character
+		if char then
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid.WalkSpeed = Settings.Player.Speed
+			end
+		end
+	end
+
+	-- 에임봇 + 자동발사
 	if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
 		local target = GetClosest()
 		if target then
 			local goal = CFrame.new(Camera.CFrame.Position, target.Position)
 			local smooth = math.clamp(1 - Settings.Aimbot.Smoothness, 0.05, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(goal, smooth)
+
+			-- 자동발사
+			if Settings.Aimbot.AutoFire then
+				local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+				if tool then
+					pcall(function()
+						tool:Activate()
+					end)
+				end
+			end
 		end
 	end
 
@@ -376,6 +460,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "인피니트 점프 추가 - by 랭온",
+	Content = "스피드핵 + 순간이동 + 자동발사 - by 랭온",
 	Duration = 4,
 })
