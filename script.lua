@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (벽통과)
+-- 자체제작 핵 v2 (1500m 제한)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -23,6 +23,7 @@ local Settings = {
 		TeamCheck = true,
 		WallCheck = true,
 		FOVVisible = true,
+		MaxDistance = 1500,
 	},
 	ESP = {
 		Enabled = false,
@@ -31,7 +32,7 @@ local Settings = {
 		Distance = true,
 		Health = true,
 		TeamCheck = true,
-		MaxDistance = 2000,
+		MaxDistance = 1500,
 		Color = Color3.fromRGB(210, 210, 220),
 	},
 	Player = {
@@ -328,11 +329,12 @@ local function IsVisible(targetPart)
 	return result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
--- 가장 가까운 적
+-- 가장 가까운 적 (1500m 제한)
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
 	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+	local myRoot = myChar.HumanoidRootPart
 
 	for _, player in pairs(Players:GetPlayers()) do
 		if player == LocalPlayer then continue end
@@ -342,7 +344,12 @@ local function GetClosest()
 		if not char then continue end
 		local humanoid = char:FindFirstChildOfClass("Humanoid")
 		local head = char:FindFirstChild("Head")
-		if not humanoid or humanoid.Health <= 0 or not head then continue end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not humanoid or humanoid.Health <= 0 or not head or not root then continue end
+
+		-- 거리 제한
+		local dist3d = (root.Position - myRoot.Position).Magnitude
+		if dist3d > Settings.Aimbot.MaxDistance then continue end
 
 		if not IsVisible(head) then continue end
 
@@ -394,7 +401,7 @@ RunService:BindToRenderStep("AimbotForce", Enum.RenderPriority.Last.Value, funct
 
 	UpdateESP()
 
-	-- 에임봇 (벽 체크 포함)
+	-- 에임봇 (벽 체크 + 1500m 제한)
 	if Settings.Aimbot.Enabled then
 		local target = GetClosest()
 		if target then
@@ -414,6 +421,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "벽통과로 이름 변경 - by 랭온",
+	Content = "에임봇/ESP 버그 수정 - by 랭온",
 	Duration = 4,
 })
