@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (1500m 제한)
+-- 자체제작 핵 v2 (스핀핵 추가)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -38,6 +38,12 @@ local Settings = {
 	Player = {
 		InfiniteJump = false,
 		Noclip = false,
+	},
+	Spinbot = {
+		Enabled = false,
+		Speed = 25,
+		Range = 30,
+		AutoShoot = true,
 	}
 }
 
@@ -139,6 +145,40 @@ PlayerTab:CreateToggle({
 	Callback = function(Value) Settings.Player.Noclip = Value end,
 })
 
+PlayerTab:CreateSection("스핀핵")
+
+PlayerTab:CreateToggle({
+	Name = "스핀핵",
+	CurrentValue = false,
+	Flag = "Spinbot",
+	Callback = function(Value) Settings.Spinbot.Enabled = Value end,
+})
+
+PlayerTab:CreateSlider({
+	Name = "스핀 속도",
+	Range = {5, 60},
+	Increment = 1,
+	CurrentValue = 25,
+	Flag = "SpinSpeed",
+	Callback = function(Value) Settings.Spinbot.Speed = Value end,
+})
+
+PlayerTab:CreateSlider({
+	Name = "감지 거리",
+	Range = {10, 80},
+	Increment = 1,
+	CurrentValue = 30,
+	Flag = "SpinRange",
+	Callback = function(Value) Settings.Spinbot.Range = Value end,
+})
+
+PlayerTab:CreateToggle({
+	Name = "범위 안 자동 조준 사격",
+	CurrentValue = true,
+	Flag = "SpinAutoShoot",
+	Callback = function(Value) Settings.Spinbot.AutoShoot = Value end,
+})
+
 -- 서비스
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -238,14 +278,10 @@ local function CreateESP(player)
 		if not char then return end
 		highlight.Parent = char
 		local head = char:WaitForChild("Head", 3)
-		if head then
-			billboard.Parent = head
-		end
+		if head then billboard.Parent = head end
 	end
 
-	if player.Character then
-		attach(player.Character)
-	end
+	if player.Character then attach(player.Character) end
 	player.CharacterAdded:Connect(attach)
 end
 
@@ -329,7 +365,7 @@ local function IsVisible(targetPart)
 	return result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
--- 가장 가까운 적 (1500m 제한)
+-- 가장 가까운 적 (에임봇용)
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
@@ -347,10 +383,8 @@ local function GetClosest()
 		local root = char:FindFirstChild("HumanoidRootPart")
 		if not humanoid or humanoid.Health <= 0 or not head or not root then continue end
 
-		-- 거리 제한
 		local dist3d = (root.Position - myRoot.Position).Magnitude
 		if dist3d > Settings.Aimbot.MaxDistance then continue end
-
 		if not IsVisible(head) then continue end
 
 		local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
@@ -359,6 +393,33 @@ local function GetClosest()
 		local dist = (Vector2.new(pos.X, pos.Y) - Camera.ViewportSize / 2).Magnitude
 		if dist < shortest then
 			shortest = dist
+			closest = head
+		end
+	end
+	return closest
+end
+
+-- 스핀핵용 범위 안 적 찾기
+local function GetEnemyInRange()
+	local myChar = LocalPlayer.Character
+	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+	local myRoot = myChar.HumanoidRootPart
+
+	local closest, closestDist = nil, Settings.Spinbot.Range
+	for _, player in pairs(Players:GetPlayers()) do
+		if player == LocalPlayer then continue end
+		if Settings.Aimbot.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then continue end
+
+		local char = player.Character
+		if not char then continue end
+		local humanoid = char:FindFirstChildOfClass("Humanoid")
+		local head = char:FindFirstChild("Head")
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not humanoid or humanoid.Health <= 0 or not head or not root then continue end
+
+		local dist = (root.Position - myRoot.Position).Magnitude
+		if dist < closestDist then
+			closestDist = dist
 			closest = head
 		end
 	end
@@ -379,12 +440,8 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- 초기화
-for _, p in pairs(Players:GetPlayers()) do
-	CreateESP(p)
-end
-
+for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
-
 Players.PlayerRemoving:Connect(function(p)
 	if ESPObjects[p] then
 		pcall(function() ESPObjects[p].Highlight:Destroy() end)
@@ -393,16 +450,65 @@ Players.PlayerRemoving:Connect(function(p)
 	end
 end)
 
+-- 스핀 각도
+local spinAngle = 0
+local lastShoot = 0
+
 -- 메인 루프
-RunService:BindToRenderStep("AimbotForce", Enum.RenderPriority.Last.Value, function()
+RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function(dt)
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
 	FOVFrame.Visible = Settings.Aimbot.Enabled and Settings.Aimbot.FOVVisible
 
 	UpdateESP()
 
-	-- 에임봇 (벽 체크 + 1500m 제한)
-	if Settings.Aimbot.Enabled then
+	-- 스핀핵
+	if Settings.Spinbot.Enabled then
+		local char = LocalPlayer.Character
+		if char then
+			local root = char:FindFirstChild("HumanoidRootPart")
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			if root and humanoid then
+				-- 3인칭 강제 + 몸 전체 보이게
+				Camera.CameraType = Enum.CameraType.Custom
+				LocalPlayer.CameraMinZoomDistance = 10
+				LocalPlayer.CameraMaxZoomDistance = 20
+				humanoid.CameraOffset = Vector3.new(0, 1.5, 0)
+
+				-- 계속 회전
+				spinAngle = spinAngle + (Settings.Spinbot.Speed * dt * 10)
+				local pos = root.Position
+				root.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+
+				-- 범위 안 적이 있으면 조준해서 쏘기
+				if Settings.Spinbot.AutoShoot then
+					local target = GetEnemyInRange()
+					if target and tick() - lastShoot > 0.15 then
+						lastShoot = tick()
+						-- 카메라만 잠깐 적에게 돌렸다가 바로 복구 (몸통은 계속 돔)
+						local oldCF = Camera.CFrame
+						Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+						
+						local tool = char:FindFirstChildOfClass("Tool")
+						if tool then
+							pcall(function() tool:Activate() end)
+						end
+						
+						task.delay(0.05, function()
+							if Camera then Camera.CFrame = oldCF end
+						end)
+					end
+				end
+			end
+		end
+	else
+		-- 스핀핵 꺼지면 카메라 원래대로
+		LocalPlayer.CameraMinZoomDistance = 0.5
+		LocalPlayer.CameraMaxZoomDistance = 128
+	end
+
+	-- 일반 에임봇 (스핀핵 꺼져있을 때만)
+	if Settings.Aimbot.Enabled and not Settings.Spinbot.Enabled then
 		local target = GetClosest()
 		if target then
 			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
@@ -421,6 +527,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "에임봇/ESP 버그 수정 - by 랭온",
+	Content = "스핀핵 추가됨 - by 랭온",
 	Duration = 4,
 })
