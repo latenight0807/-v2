@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (스핀핵 추가)
+-- 자체제작 핵 v2 (스핀핵 3인칭 강제)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -41,7 +41,7 @@ local Settings = {
 	},
 	Spinbot = {
 		Enabled = false,
-		Speed = 25,
+		Speed = 18,
 		Range = 30,
 		AutoShoot = true,
 	}
@@ -156,9 +156,9 @@ PlayerTab:CreateToggle({
 
 PlayerTab:CreateSlider({
 	Name = "스핀 속도",
-	Range = {5, 60},
+	Range = {5, 40},
 	Increment = 1,
-	CurrentValue = 25,
+	CurrentValue = 18,
 	Flag = "SpinSpeed",
 	Callback = function(Value) Settings.Spinbot.Speed = Value end,
 })
@@ -365,7 +365,7 @@ local function IsVisible(targetPart)
 	return result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
--- 가장 가까운 적 (에임봇용)
+-- 가장 가까운 적
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
@@ -399,7 +399,7 @@ local function GetClosest()
 	return closest
 end
 
--- 스핀핵용 범위 안 적 찾기
+-- 범위 안 적
 local function GetEnemyInRange()
 	local myChar = LocalPlayer.Character
 	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
@@ -450,64 +450,60 @@ Players.PlayerRemoving:Connect(function(p)
 	end
 end)
 
--- 스핀 각도
 local spinAngle = 0
 local lastShoot = 0
 
 -- 메인 루프
-RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function(dt)
+RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
 	FOVFrame.Visible = Settings.Aimbot.Enabled and Settings.Aimbot.FOVVisible
 
 	UpdateESP()
 
+	local char = LocalPlayer.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+
 	-- 스핀핵
-	if Settings.Spinbot.Enabled then
-		local char = LocalPlayer.Character
-		if char then
-			local root = char:FindFirstChild("HumanoidRootPart")
-			local humanoid = char:FindFirstChildOfClass("Humanoid")
-			if root and humanoid then
-				-- 3인칭 강제 + 몸 전체 보이게
-				Camera.CameraType = Enum.CameraType.Custom
-				LocalPlayer.CameraMinZoomDistance = 10
-				LocalPlayer.CameraMaxZoomDistance = 20
-				humanoid.CameraOffset = Vector3.new(0, 1.5, 0)
+	if Settings.Spinbot.Enabled and root and humanoid then
+		-- 3인칭 강제 (매 프레임)
+		pcall(function()
+			LocalPlayer.CameraMode = Enum.CameraMode.Classic
+			LocalPlayer.CameraMinZoomDistance = 14
+			LocalPlayer.CameraMaxZoomDistance = 16
+		end)
 
-				-- 계속 회전
-				spinAngle = spinAngle + (Settings.Spinbot.Speed * dt * 10)
-				local pos = root.Position
-				root.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+		-- 회전
+		spinAngle = (spinAngle + Settings.Spinbot.Speed * dt * 6) % 360
+		local currentPos = root.Position
+		root.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
 
-				-- 범위 안 적이 있으면 조준해서 쏘기
-				if Settings.Spinbot.AutoShoot then
-					local target = GetEnemyInRange()
-					if target and tick() - lastShoot > 0.15 then
-						lastShoot = tick()
-						-- 카메라만 잠깐 적에게 돌렸다가 바로 복구 (몸통은 계속 돔)
-						local oldCF = Camera.CFrame
-						Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-						
-						local tool = char:FindFirstChildOfClass("Tool")
-						if tool then
-							pcall(function() tool:Activate() end)
-						end
-						
-						task.delay(0.05, function()
-							if Camera then Camera.CFrame = oldCF end
-						end)
-					end
+		-- 범위 안 자동 사격
+		if Settings.Spinbot.AutoShoot then
+			local target = GetEnemyInRange()
+			if target and tick() - lastShoot > 0.2 then
+				lastShoot = tick()
+				local tool = char:FindFirstChildOfClass("Tool")
+				if tool then
+					local oldCF = Camera.CFrame
+					Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+					pcall(function() tool:Activate() end)
+					task.delay(0.05, function()
+						if Camera then Camera.CFrame = oldCF end
+					end)
 				end
 			end
 		end
 	else
-		-- 스핀핵 꺼지면 카메라 원래대로
-		LocalPlayer.CameraMinZoomDistance = 0.5
-		LocalPlayer.CameraMaxZoomDistance = 128
+		-- 복구
+		pcall(function()
+			LocalPlayer.CameraMinZoomDistance = 0.5
+			LocalPlayer.CameraMaxZoomDistance = 128
+		end)
 	end
 
-	-- 일반 에임봇 (스핀핵 꺼져있을 때만)
+	-- 일반 에임봇
 	if Settings.Aimbot.Enabled and not Settings.Spinbot.Enabled then
 		local target = GetClosest()
 		if target then
@@ -516,8 +512,8 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function
 	end
 
 	-- 벽통과
-	if Settings.Player.Noclip and LocalPlayer.Character then
-		for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+	if Settings.Player.Noclip and char then
+		for _, part in pairs(char:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
 			end
@@ -527,6 +523,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "스핀핵 추가됨 - by 랭온",
+	Content = "스핀핵 3인칭 강제 수정 - by 랭온",
 	Duration = 4,
 })
