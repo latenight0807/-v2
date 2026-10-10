@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (스핀핵 3인칭 강제 v2)
+-- 자체제작 핵 v2 (스핀핵 수정 - 화면 안 돌고 전신 보이게)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -426,6 +426,16 @@ local function GetEnemyInRange()
 	return closest
 end
 
+-- 전신 보이게 만들기
+local function ForceFullBodyVisible(char)
+	if not char then return end
+	for _, part in pairs(char:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.LocalTransparencyModifier = 0
+		end
+	end
+end
+
 -- 무한 점프
 UserInputService.JumpRequest:Connect(function()
 	if Settings.Player.InfiniteJump then
@@ -467,19 +477,21 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function
 
 	-- 스핀핵
 	if Settings.Spinbot.Enabled and root and humanoid then
-		-- 카메라 완전 제어
+		-- 전신 강제 표시
+		ForceFullBodyVisible(char)
+
+		-- 카메라 Scriptable
 		Camera.CameraType = Enum.CameraType.Scriptable
 
-		-- 캐릭터 회전
+		-- 캐릭터만 회전 (카메라는 따로)
 		spinAngle = (spinAngle + Settings.Spinbot.Speed * dt * 12) % 360
 		local currentPos = root.Position
 		root.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
 
-		-- 3인칭 카메라 (뒤에서 고정 거리)
-		local offset = Vector3.new(0, 2.5, 12)
-		local rotatedOffset = CFrame.Angles(0, math.rad(spinAngle), 0):VectorToWorldSpace(offset)
-		local camPos = currentPos + rotatedOffset
-		Camera.CFrame = CFrame.new(camPos, currentPos + Vector3.new(0, 1.8, 0))
+		-- 카메라는 고정된 방향에서 따라감 (화면이 안 돌아감)
+		local camOffset = Vector3.new(0, 3, 14)
+		local camPos = currentPos + camOffset
+		Camera.CFrame = CFrame.new(camPos, currentPos + Vector3.new(0, 1.5, 0))
 
 		-- 범위 안 자동 사격
 		if Settings.Spinbot.AutoShoot then
@@ -491,7 +503,6 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function
 					local oldCF = Camera.CFrame
 					Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
 					pcall(function() tool:Activate() end)
-					task.delay(0.03, function() end)
 				end
 			end
 		end
@@ -521,6 +532,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "스핀핵 3인칭 강제 - by 랭온",
+	Content = "스핀핵 수정 - by 랭온",
 	Duration = 4,
 })
