@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (스피드핵 + 순간이동 + 자동발사)
+-- 자체제작 핵 v2 (FOV 안 들어오면 카메라 고정)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -19,8 +19,7 @@ local PlayerTab = Window:CreateTab("플레이어", 4483362458)
 local Settings = {
 	Aimbot = {
 		Enabled = false,
-		FOV = 150,
-		Smoothness = 0.12,
+		FOV = 200,
 		TeamCheck = true,
 		FOVVisible = true,
 		AutoFire = false,
@@ -78,20 +77,11 @@ CombatTab:CreateToggle({
 
 CombatTab:CreateSlider({
 	Name = "FOV 크기",
-	Range = {40, 500},
-	Increment = 5,
-	CurrentValue = 150,
+	Range = {40, 600},
+	Increment = 10,
+	CurrentValue = 200,
 	Flag = "FOVSize",
 	Callback = function(Value) Settings.Aimbot.FOV = Value end,
-})
-
-CombatTab:CreateSlider({
-	Name = "부드러움",
-	Range = {0, 100},
-	Increment = 1,
-	CurrentValue = 12,
-	Flag = "Smoothness",
-	Callback = function(Value) Settings.Aimbot.Smoothness = Value / 100 end,
 })
 
 -- 시각 탭
@@ -189,7 +179,7 @@ FOVGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 local FOVFrame = Instance.new("Frame")
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-FOVFrame.Size = UDim2.new(0, 300, 0, 300)
+FOVFrame.Size = UDim2.new(0, 400, 0, 400)
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.Visible = false
 FOVFrame.Parent = FOVGui
@@ -327,7 +317,7 @@ local function UpdateESP()
 	end
 end
 
--- 에임봇
+-- 가장 가까운 적 (FOV 안)
 local function GetClosest()
 	local closest, shortest = nil, Settings.Aimbot.FOV
 	local myChar = LocalPlayer.Character
@@ -355,7 +345,7 @@ local function GetClosest()
 	return closest
 end
 
--- 순간이동 (가장 가까운 적 머리 위로)
+-- 순간이동
 local function TeleportToEnemy()
 	local myChar = LocalPlayer.Character
 	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
@@ -410,7 +400,8 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 -- 메인 루프
-RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, function()
+local lastFire = 0
+RunService:BindToRenderStep("AimbotForce", Enum.RenderPriority.Last.Value, function()
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
 	FOVFrame.Visible = Settings.Aimbot.Enabled and Settings.Aimbot.FOVVisible
@@ -428,16 +419,15 @@ RunService:BindToRenderStep("AimbotFix", Enum.RenderPriority.Camera.Value + 1, f
 		end
 	end
 
-	-- 에임봇 + 자동발사
-	if Settings.Aimbot.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+	-- 에임봇: FOV 안에 들어오면 바로 카메라 고정
+	if Settings.Aimbot.Enabled then
 		local target = GetClosest()
 		if target then
-			local goal = CFrame.new(Camera.CFrame.Position, target.Position)
-			local smooth = math.clamp(1 - Settings.Aimbot.Smoothness, 0.05, 1)
-			Camera.CFrame = Camera.CFrame:Lerp(goal, smooth)
+			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
 
 			-- 자동발사
-			if Settings.Aimbot.AutoFire then
+			if Settings.Aimbot.AutoFire and tick() - lastFire > 0.1 then
+				lastFire = tick()
 				local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
 				if tool then
 					pcall(function()
@@ -460,6 +450,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "스피드핵 + 순간이동 + 자동발사 - by 랭온",
+	Content = "에임핵과 자동발사 업데이트 - by 랭온",
 	Duration = 4,
 })
