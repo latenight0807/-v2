@@ -1,4 +1,4 @@
--- 자체제작 핵 v2 (스핀핵 수정 - 화면 안 돌고 전신 보이게)
+-- 자체제작 핵 v2 (스핀핵 - 카메라 자유 + 몸만 회전)
 -- by 랭온
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -426,12 +426,12 @@ local function GetEnemyInRange()
 	return closest
 end
 
--- 전신 보이게 만들기
-local function ForceFullBodyVisible(char)
+-- 전신 강제
+local function ForceFullBody(char)
 	if not char then return end
-	for _, part in pairs(char:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.LocalTransparencyModifier = 0
+	for _, v in pairs(char:GetDescendants()) do
+		if v:IsA("BasePart") or v:IsA("Decal") then
+			v.LocalTransparencyModifier = 0
 		end
 	end
 end
@@ -464,7 +464,7 @@ local spinAngle = 0
 local lastShoot = 0
 
 -- 메인 루프
-RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function(dt)
+RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Character.Value, function(dt)
 	local size = Settings.Aimbot.FOV * 2
 	FOVFrame.Size = UDim2.new(0, size, 0, size)
 	FOVFrame.Visible = Settings.Aimbot.Enabled and Settings.Aimbot.FOVVisible
@@ -475,23 +475,13 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 
-	-- 스핀핵
 	if Settings.Spinbot.Enabled and root and humanoid then
-		-- 전신 강제 표시
-		ForceFullBodyVisible(char)
+		ForceFullBody(char)
 
-		-- 카메라 Scriptable
-		Camera.CameraType = Enum.CameraType.Scriptable
-
-		-- 캐릭터만 회전 (카메라는 따로)
-		spinAngle = (spinAngle + Settings.Spinbot.Speed * dt * 12) % 360
-		local currentPos = root.Position
-		root.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
-
-		-- 카메라는 고정된 방향에서 따라감 (화면이 안 돌아감)
-		local camOffset = Vector3.new(0, 3, 14)
-		local camPos = currentPos + camOffset
-		Camera.CFrame = CFrame.new(camPos, currentPos + Vector3.new(0, 1.5, 0))
+		-- 캐릭터만 회전 (카메라는 건드리지 않음)
+		spinAngle = (spinAngle + Settings.Spinbot.Speed * dt * 15) % 360
+		local pos = root.Position
+		root.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(spinAngle), 0)
 
 		-- 범위 안 자동 사격
 		if Settings.Spinbot.AutoShoot then
@@ -503,12 +493,11 @@ RunService:BindToRenderStep("MainLoop", Enum.RenderPriority.Last.Value, function
 					local oldCF = Camera.CFrame
 					Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
 					pcall(function() tool:Activate() end)
+					task.delay(0.03, function()
+						if Camera then Camera.CFrame = oldCF end
+					end)
 				end
 			end
-		end
-	else
-		if Camera.CameraType == Enum.CameraType.Scriptable then
-			Camera.CameraType = Enum.CameraType.Custom
 		end
 	end
 
@@ -532,6 +521,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "스핀핵 수정 - by 랭온",
+	Content = "스핀핵 업데이트 - by 랭온",
 	Duration = 4,
 })
