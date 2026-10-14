@@ -521,6 +521,6 @@ end)
 
 Rayfield:Notify({
 	Title = "자체제작 핵 v2",
-	Content = "스핀핵 카메라 자유 - by 랭온",
+	Content = "스핀핵 업데이트 - by 랭온",
 	Duration = 4,
 })
